@@ -1,0 +1,9 @@
+/target
+/Cargo.lock
+
+
+# Vim swap
+*.swp
+
+# Mac crap
+.DS_Store
