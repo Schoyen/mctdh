@@ -46,7 +46,7 @@ pub fn eval_sd_one_body_operator(
     let mut c_i = 0;
 
     loop {
-        let mut val = 0.0;
+        let mut val = Complex::new(0.0, 0.0);
         let mut an_sign = -1;
 
         for start in 0..2 {
@@ -54,11 +54,13 @@ pub fn eval_sd_one_body_operator(
 
             for q_i in (start..state.len()).step_by(2) {
                 let mut new_state = state.clone();
-                let q = new_state.remove(q_i)?;
+                let q = new_state.remove(q_i);
 
                 // p < q
                 let mut cr_sign = 1;
-                for p in 0..q {}
+                for p in 0..q {
+                    for q_ii in 0..q_i {}
+                }
 
                 // p == q
                 val += h[[q, q]];
