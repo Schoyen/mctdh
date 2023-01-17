@@ -8,14 +8,19 @@ pub trait IndexSet {
 }
 
 #[derive(Debug)]
-pub struct DenseState {
-    shape: Vec<usize>,
+pub struct DenseState<'a> {
+    shape: &'a Vec<usize>,
     indices: Vec<usize>,
     compound: usize,
 }
 
-impl DenseState {
-    fn new_init_state(shape: Vec<usize>) -> Self {
+pub struct DenseIterator<'a> {
+    state: &'a DenseState<'a>,
+    ind_diff: usize,
+}
+
+impl<'a> DenseState<'a> {
+    fn new_init_state(shape: &'a Vec<usize>) -> Self {
         let indices = vec![0; shape.len()];
 
         Self {
@@ -25,7 +30,7 @@ impl DenseState {
         }
     }
 
-    fn new_from_indices(indices: Vec<usize>, shape: Vec<usize>) -> Self {
+    fn new_from_indices(indices: Vec<usize>, shape: &'a Vec<usize>) -> Self {
         let mut compound = 0;
         let mut prod = 1;
 
@@ -41,7 +46,7 @@ impl DenseState {
         }
     }
 
-    fn new_from_compound(compound: usize, shape: Vec<usize>) -> Self {
+    fn new_from_compound(compound: usize, shape: &'a Vec<usize>) -> Self {
         let mut indices = vec![0; shape.len()];
         let mut prod = 1;
 
@@ -58,7 +63,15 @@ impl DenseState {
     }
 }
 
-impl IndexSet for DenseState {
+impl<'a> Iterator for DenseIterator<'a> {
+    type Item = (i64, DenseState<'a>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        Some((1, DenseState::new_init_state(self.state.shape)))
+    }
+}
+
+impl<'a> IndexSet for DenseState<'a> {
     fn get_one_neighbor(&self) -> Option<(i64, Self)> {
         // This is wrong!
         let mut carry = 1;
@@ -77,7 +90,7 @@ impl IndexSet for DenseState {
             return None;
         }
 
-        Some((1, DenseState::new_from_indices(indices, self.shape.clone())))
+        Some((1, DenseState::new_from_indices(indices, self.shape)))
     }
 
     fn get_two_neighbor(&self) -> Option<(i64, Self)> {
@@ -97,7 +110,7 @@ impl IndexSet for DenseState {
             return None;
         }
 
-        Some((1, DenseState::new_from_indices(indices, self.shape.clone())))
+        Some((1, DenseState::new_from_indices(indices, self.shape)))
     }
 }
 
@@ -108,7 +121,7 @@ mod tests {
     #[test]
     fn test_new_init_state_dense() {
         let shape = vec![3, 4, 5];
-        let init_state = DenseState::new_init_state(shape);
+        let init_state = DenseState::new_init_state(&shape);
 
         for x in init_state.indices {
             assert!(x == 0);
@@ -125,8 +138,8 @@ mod tests {
         for p in 0..shape[0] {
             for q in 0..shape[1] {
                 for r in 0..shape[2] {
-                    let state = DenseState::new_from_indices(vec![p, q, r], shape.clone());
-                    let state_2 = DenseState::new_from_compound(counter, shape.clone());
+                    let state = DenseState::new_from_indices(vec![p, q, r], &shape);
+                    let state_2 = DenseState::new_from_compound(counter, &shape);
 
                     assert!(state.compound == counter);
                     assert!(state.compound == state_2.compound);
@@ -146,7 +159,7 @@ mod tests {
         let shape = vec![2, 2, 4, 5];
         let mut counter = 0;
 
-        let mut state = DenseState::new_init_state(shape.clone());
+        let mut state = DenseState::new_init_state(&shape);
 
         loop {
             let (sign, neighbor_state) = match state.get_one_neighbor() {
