@@ -15,8 +15,10 @@ pub struct DenseState<'a> {
 }
 
 pub struct DenseIterator<'a> {
-    state: &'a DenseState<'a>,
-    ind_diff: usize,
+    start_state: &'a DenseState<'a>,
+    next_state: DenseState<'a>,
+    pos: usize,
+    num_iterations: usize,
 }
 
 impl<'a> DenseState<'a> {
@@ -63,11 +65,71 @@ impl<'a> DenseState<'a> {
     }
 }
 
+impl<'a> DenseIterator<'a> {
+    fn new(start_state: &'a DenseState<'a>) -> Self {
+        let mut next_inds = start_state.indices.clone();
+        let mut pos = start_state.shape.len() - 1;
+
+        for i in (0..start_state.shape.len()).rev() {
+            if start_state.shape[i] > 1 {
+                next_inds[i] = (next_inds[i] + 1) % start_state.shape[i];
+                pos = i;
+                break;
+            }
+        }
+
+        Self {
+            start_state,
+            next_state: DenseState::new_from_indices(
+                next_inds,
+                start_state.shape,
+            ),
+            pos,
+            num_iterations: 0,
+        }
+    }
+}
+
 impl<'a> Iterator for DenseIterator<'a> {
     type Item = (i64, DenseState<'a>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        Some((1, DenseState::new_init_state(self.state.shape)))
+        if self.num_iterations > 0
+            && self.start_state.indices == self.next_state.indices
+        {
+            // We have done some iterations, and come back to the start state,
+            // hence we must be done.
+            return None;
+        }
+
+        let mut new_inds = self.next_state.indices.clone();
+
+        loop {
+            new_inds[self.pos] =
+                (new_inds[self.pos] + 1) % self.start_state.shape[self.pos];
+
+            if new_inds[self.pos] == self.start_state.indices[self.pos] {
+                // We have iterated through all values at this position.
+                // Decrement self.pos, and try next position.
+                //
+                if self.pos > 0 {
+                    self.pos -= 1;
+                    continue;
+                }
+            }
+
+            self.num_iterations += 1;
+            return Some((
+                1,
+                std::mem::replace(
+                    &mut self.next_state,
+                    DenseState::new_from_indices(
+                        new_inds,
+                        self.start_state.shape,
+                    ),
+                ),
+            ));
+        }
     }
 }
 
@@ -163,9 +225,8 @@ mod tests {
     #[test]
     fn test_get_one_neighbor_dense() {
         let shape = vec![2, 2, 4, 5];
-        let mut counter = 0;
 
-        let mut state = DenseState::new_init_state(&shape);
+        let state = DenseState::new_init_state(&shape);
 
         loop {
             let (sign, neighbor_state) = match state.get_one_neighbor() {
@@ -175,6 +236,56 @@ mod tests {
 
             assert!(sign == 1);
             // let mut diff
+        }
+    }
+
+    #[test]
+    fn test_dense_iterator_one_manual() {
+        let shape = vec![3, 4, 1];
+        let state = DenseState::new_init_state(&shape);
+        let mut iter = DenseIterator::new(&state);
+
+        assert!(&state.indices == &iter.start_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 1, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 2, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 3, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![1, 0, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![2, 0, 0] == new_state.indices);
+
+        assert_eq!(iter.next().is_none(), true);
+    }
+
+    #[test]
+    fn test_dense_iterator_one() {
+        let shape = vec![3, 4, 1];
+        let state = DenseState::new_init_state(&shape);
+
+        for (sign, next_state) in DenseIterator::new(&state) {
+            assert!(sign == 1);
+
+            let mut sum = 0;
+            for (x, y) in state
+                .indices
+                .clone()
+                .into_iter()
+                .zip(next_state.indices.clone().into_iter())
+            {
+                if x != y {
+                    sum += 1;
+                }
+            }
+
+            assert!(sum == 1);
         }
     }
 }
