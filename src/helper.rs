@@ -3,7 +3,9 @@ use num::complex::Complex;
 
 fn init_sd_state(start: usize, n: usize, l: usize) -> Vec<usize> {
     if start + n >= l {
-        panic!("Too high start value, or too few orbitals `l` for `n` particles");
+        panic!(
+            "Too high start value, or too few orbitals `l` for `n` particles"
+        );
     }
 
     (start..(start + n)).collect()
@@ -121,7 +123,9 @@ mod tests {
     fn test_break_eval_sd_one_body_operator() {
         let n = 3;
         let l = 10;
-        let c = Array::<Complex<f64>, _>::zeros(l * (l - 1) * (l - 2) / (n * (n - 1) * (n - 2)));
+        let c = Array::<Complex<f64>, _>::zeros(
+            l * (l - 1) * (l - 2) / (n * (n - 1) * (n - 2)),
+        );
         let h = Array::<Complex<f64>, _>::zeros((l, l));
         eval_sd_one_body_operator(&c, &h, n);
         assert!(true);

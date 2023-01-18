@@ -138,13 +138,19 @@ mod tests {
         for p in 0..shape[0] {
             for q in 0..shape[1] {
                 for r in 0..shape[2] {
-                    let state = DenseState::new_from_indices(vec![p, q, r], &shape);
-                    let state_2 = DenseState::new_from_compound(counter, &shape);
+                    let state =
+                        DenseState::new_from_indices(vec![p, q, r], &shape);
+                    let state_2 =
+                        DenseState::new_from_compound(counter, &shape);
 
                     assert!(state.compound == counter);
                     assert!(state.compound == state_2.compound);
 
-                    for (x, y) in state.indices.into_iter().zip(state_2.indices.into_iter()) {
+                    for (x, y) in state
+                        .indices
+                        .into_iter()
+                        .zip(state_2.indices.into_iter())
+                    {
                         assert!(x == y);
                     }
 
