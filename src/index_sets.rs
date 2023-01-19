@@ -111,7 +111,6 @@ impl<'a> Iterator for DenseIterator<'a> {
             if new_inds[self.pos] == self.start_state.indices[self.pos] {
                 // We have iterated through all values at this position.
                 // Decrement self.pos, and try next position.
-                //
                 if self.pos > 0 {
                     self.pos -= 1;
                     continue;
