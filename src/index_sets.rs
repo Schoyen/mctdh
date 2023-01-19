@@ -5,7 +5,7 @@ pub struct DenseState<'a> {
     compound: usize,
 }
 
-pub struct DenseIterator<'a> {
+pub struct DenseOneBodyIterator<'a> {
     start_state: &'a DenseState<'a>,
     next_state: DenseState<'a>,
     pos: usize,
@@ -56,7 +56,7 @@ impl<'a> DenseState<'a> {
     }
 }
 
-impl<'a> DenseIterator<'a> {
+impl<'a> DenseOneBodyIterator<'a> {
     fn new(start_state: &'a DenseState<'a>) -> Self {
         let mut next_inds = start_state.indices.clone();
         let mut pos = start_state.shape.len() - 1;
@@ -81,7 +81,7 @@ impl<'a> DenseIterator<'a> {
     }
 }
 
-impl<'a> Iterator for DenseIterator<'a> {
+impl<'a> Iterator for DenseOneBodyIterator<'a> {
     type Item = (i64, DenseState<'a>);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -173,7 +173,7 @@ mod tests {
     fn test_dense_iterator_one_manual() {
         let shape = vec![3, 4, 1];
         let state = DenseState::new_init_state(&shape);
-        let mut iter = DenseIterator::new(&state);
+        let mut iter = DenseOneBodyIterator::new(&state);
 
         assert!(&state.indices == &iter.start_state.indices);
 
@@ -196,11 +196,11 @@ mod tests {
     }
 
     #[test]
-    fn test_dense_iterator_one() {
+    fn test_dense_one_body_iterator() {
         let shape = vec![3, 4, 1];
         let state = DenseState::new_init_state(&shape);
 
-        for (sign, next_state) in DenseIterator::new(&state) {
+        for (sign, next_state) in DenseOneBodyIterator::new(&state) {
             assert!(sign == 1);
 
             let mut sum = 0;
