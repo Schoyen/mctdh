@@ -12,6 +12,15 @@ pub struct DenseOneBodyIterator<'a> {
     num_iterations: usize,
 }
 
+pub struct DenseTwoBodyIterator<'a> {
+    start_state: &'a DenseState<'a>,
+    next_state: DenseState<'a>,
+    one_body_iterator: DenseOneBodyIterator<'a>,
+    pos_r: usize,
+    pos_l: usize,
+    num_iterations: usize,
+}
+
 impl<'a> DenseState<'a> {
     fn new_init_state(shape: &'a Vec<usize>) -> Self {
         let indices = vec![0; shape.len()];
@@ -58,8 +67,15 @@ impl<'a> DenseState<'a> {
 
 impl<'a> DenseOneBodyIterator<'a> {
     fn new(start_state: &'a DenseState<'a>) -> Self {
+        DenseOneBodyIterator::new_with_pos(
+            start_state,
+            start_state.shape.len() - 1,
+        )
+    }
+
+    fn new_with_pos(start_state: &'a DenseState<'a>, pos: usize) -> Self {
         let mut next_inds = start_state.indices.clone();
-        let mut pos = start_state.shape.len() - 1;
+        let mut pos = pos;
 
         for i in (0..start_state.shape.len()).rev() {
             if start_state.shape[i] > 1 {
@@ -76,6 +92,42 @@ impl<'a> DenseOneBodyIterator<'a> {
                 start_state.shape,
             ),
             pos,
+            num_iterations: 0,
+        }
+    }
+}
+
+impl<'a> DenseTwoBodyIterator<'a> {
+    fn new(start_state: &'a DenseState<'a>) -> Self {
+        let mut next_inds = start_state.indices.clone();
+        let mut pos_r = start_state.shape.len() - 1;
+        let mut pos_l = match pos_r.checked_sub(1) {
+            Some(c) => c,
+            None => {
+                panic!("The start_state needs to contain at least two indices")
+            }
+        };
+
+        for i in (0..pos_r).rev() {
+            if start_state.shape[i] > 1 {
+                next_inds[i] = (next_inds[i] + 1) % start_state.shape[i];
+                pos_l = i;
+                break;
+            }
+        }
+
+        let one_body_iterator =
+            DenseOneBodyIterator::new_with_pos(start_state, pos_l);
+
+        Self {
+            start_state,
+            next_state: DenseState::new_from_indices(
+                next_inds,
+                start_state.shape,
+            ),
+            one_body_iterator,
+            pos_r,
+            pos_l,
             num_iterations: 0,
         }
     }
@@ -120,6 +172,23 @@ impl<'a> Iterator for DenseOneBodyIterator<'a> {
                 ),
             ));
         }
+    }
+}
+
+impl<'a> Iterator for DenseTwoBodyIterator<'a> {
+    type Item = (i64, DenseState<'a>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        // TODO: YOU ARE HERE!
+        if self.num_iterations > 0
+            && self.start_state.indices == self.next_state.indices
+        {
+            return None;
+        }
+
+        let mut new_inds = self.next_state.indices.clone();
+
+        Some((1, DenseState::new_init_state(self.start_state.shape)))
     }
 }
 
