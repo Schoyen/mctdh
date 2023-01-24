@@ -15,7 +15,6 @@ pub struct DenseOneBodyIterator<'a> {
 pub struct DenseTwoBodyIterator<'a> {
     start_state: &'a DenseState<'a>,
     next_state: DenseState<'a>,
-    one_body_iterator: DenseOneBodyIterator<'a>,
     pos_r: usize,
     pos_l: usize,
     num_iterations: usize,
@@ -116,16 +115,12 @@ impl<'a> DenseTwoBodyIterator<'a> {
             }
         }
 
-        let one_body_iterator =
-            DenseOneBodyIterator::new_with_pos(start_state, pos_l);
-
         Self {
             start_state,
             next_state: DenseState::new_from_indices(
                 next_inds,
                 start_state.shape,
             ),
-            one_body_iterator,
             pos_r,
             pos_l,
             num_iterations: 0,
@@ -179,7 +174,6 @@ impl<'a> Iterator for DenseTwoBodyIterator<'a> {
     type Item = (i64, DenseState<'a>);
 
     fn next(&mut self) -> Option<Self::Item> {
-        // TODO: YOU ARE HERE!
         if self.num_iterations > 0
             && self.start_state.indices == self.next_state.indices
         {
@@ -188,7 +182,86 @@ impl<'a> Iterator for DenseTwoBodyIterator<'a> {
 
         let mut new_inds = self.next_state.indices.clone();
 
-        Some((1, DenseState::new_init_state(self.start_state.shape)))
+        loop {
+            new_inds[self.pos_l] =
+                (new_inds[self.pos_l] + 1) % self.start_state.shape[self.pos_l];
+
+            if new_inds[self.pos_l] == self.start_state.indices[self.pos_l] {
+                // We have iterated through all values at this position.
+                // Decrement self.pos_l, and try next position.
+                if self.pos_l > 0 {
+                    self.pos_l -= 1;
+                    continue;
+                } else {
+                    // We have completed one run of pos_l, time to decrement
+                    // pos_r
+                    break;
+                }
+            }
+
+            self.num_iterations += 1;
+            return Some((
+                1,
+                std::mem::replace(
+                    &mut self.next_state,
+                    DenseState::new_from_indices(
+                        new_inds,
+                        self.start_state.shape,
+                    ),
+                ),
+            ));
+        }
+
+        loop {
+            new_inds[self.pos_r] =
+                (new_inds[self.pos_r] + 1) % self.start_state.shape[self.pos_r];
+
+            if new_inds[self.pos_r] == self.start_state.indices[self.pos_r] {
+                if self.pos_r > 1 {
+                    self.pos_r -= 1;
+                    continue;
+                }
+            }
+
+            // self.pos_r should not be smaller than 1
+            self.pos_l = match self.pos_r.checked_sub(1) {
+                Some(c) => c,
+                None => {
+                    panic!("self.pos_r is smaller than 1")
+                }
+            };
+
+            loop {
+                new_inds[self.pos_l] = (new_inds[self.pos_l] + 1)
+                    % self.start_state.shape[self.pos_l];
+
+                if new_inds[self.pos_l] == self.start_state.indices[self.pos_l]
+                {
+                    // We have iterated through all values at this position.
+                    // Decrement self.pos_l, and try next position.
+                    if self.pos_l > 0 {
+                        self.pos_l -= 1;
+                        continue;
+                    } else {
+                        new_inds = self.start_state.indices.clone();
+                    }
+                }
+
+                break;
+            }
+
+            self.num_iterations += 1;
+            return Some((
+                1,
+                std::mem::replace(
+                    &mut self.next_state,
+                    DenseState::new_from_indices(
+                        new_inds,
+                        self.start_state.shape,
+                    ),
+                ),
+            ));
+        }
     }
 }
 
@@ -261,12 +334,38 @@ mod tests {
         let (_, new_state) = iter.next().unwrap();
         assert!(vec![2, 0, 0] == new_state.indices);
 
+        assert!(iter.next().is_none());
+    }
+
+    #[test]
+    fn test_dense_iterator_one_manual_between() {
+        let shape = vec![3, 4, 1];
+        let state = DenseState::new_from_indices(vec![1, 3, 0], &shape);
+        let mut iter = DenseOneBodyIterator::new(&state);
+
+        assert!(&state.indices == &iter.start_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![1, 0, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![1, 1, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![1, 2, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![2, 3, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 3, 0] == new_state.indices);
+
         assert_eq!(iter.next().is_none(), true);
     }
 
     #[test]
     fn test_dense_one_body_iterator() {
-        let shape = vec![3, 4, 1];
+        let shape = vec![1, 3, 4, 1];
         let state = DenseState::new_init_state(&shape);
 
         for (sign, next_state) in DenseOneBodyIterator::new(&state) {
@@ -286,5 +385,51 @@ mod tests {
 
             assert!(sum == 1);
         }
+    }
+
+    #[test]
+    fn test_dense_two_body_iterator_manual() {
+        let shape = vec![1, 3, 4, 1];
+        let state = DenseState::new_init_state(&shape);
+        let mut iter = DenseTwoBodyIterator::new(&state);
+
+        assert!(&state.indices == &iter.start_state.indices);
+        assert!(iter.pos_r == 3);
+        assert!(iter.pos_l == 2);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 0, 1, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 0, 2, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 0, 3, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 1, 0, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 2, 0, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 1, 1, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 2, 1, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 1, 2, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 2, 2, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 1, 3, 0] == new_state.indices);
+
+        let (_, new_state) = iter.next().unwrap();
+        assert!(vec![0, 2, 3, 0] == new_state.indices);
+
+        assert!(iter.next().is_none());
     }
 }
